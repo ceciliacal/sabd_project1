@@ -6,12 +6,15 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import scala.Tuple2;
 
+import java.util.Map;
+
+
 public class Query1 {
 
     private static String filePath_puntiSommTipologia = "data/punti-somministrazione-tipologia.csv";
     private static String filePath_sommVacciniSummaryLatest = "data/somministrazioni-vaccini-summary-latest.csv";
 
-    public static void main(String[] args){
+    public static <iter, tr> void main(String[] args){
 
         SparkConf conf = new SparkConf()
                 .setMaster("local[*]")
@@ -23,18 +26,22 @@ public class Query1 {
 
         JavaRDD<String> lines_punti = sc.textFile(filePath_puntiSommTipologia);
 
+
         System.out.println("\nbefore map: ");
         System.out.println(lines_punti.take(5));
 
         //prendo header
         String[] header = lines_punti.map(line -> line.split(",")).first();
+        //lines_punti = lines_punti.filter(line -> !line.equals(header));
         String regione = header [0];
 
-        System.out.println("regione: "+regione); // "tipologia" is printed
+        System.out.println("regione: "+regione);
 
         //tupla che ha <regioni, denominazione_struttura>
-        JavaRDD<Tuple2<String, String>> values = preprocessDataset(lines_punti);
-       // preprocessDataset(lines_punti);
+        JavaRDD<Tuple2<String, String>> area_denomStrutt = preprocessDataset(lines_punti);
+
+        System.out.println("area_denomStrutt: "+area_denomStrutt.take(5));
+
 
         /*
         per prendere singola colonna:
@@ -42,8 +49,24 @@ public class Query1 {
 
          */
 
+        // adesso devo eliminare la prima riga
 
-        System.out.println("result: "+ values.take(5));
+
+                /*(idx, iter) ->{
+              if (idx == 0) iter.drop(1) else iter;
+        });
+
+                 */
+
+        // poi contare il num di strutture per regione
+        /* cioè devo creare nuovo RDD dove la chiave è la regione e il value è il numero di strutture
+        appartenenti a quella regione
+         */
+
+        JavaPairRDD.fromJavaRDD(area_denomStrutt);
+        Map<String, Long> counts = JavaPairRDD.fromJavaRDD(area_denomStrutt).countByKey();
+        System.out.println("counts"+counts);
+
 
 
     }
@@ -51,10 +74,6 @@ public class Query1 {
     //preproc punti somministrazioni x regione (devo contare numero punti somm x ogni regione)
     private static JavaRDD<Tuple2<String, String>> preprocessDataset(JavaRDD<String> lines_punti) {
 
-        //It is similar to map transformation; however, this transformation produces PairRDD, that is,
-        // an RDD consisting of key and value pairs. This transformation is specific to Java RDDs
-
-        //JavaRDD<Tuple2<String, String>> result = lines_punti.maptoPair ecc
         JavaRDD <Tuple2<String, String>> result = lines_punti.map(element -> {
                     String[] myFields = element.split(",");
                     String col_reg = myFields[0];
@@ -70,27 +89,7 @@ public class Query1 {
     }
 
 
-
-
-
-
-
-
-
-/*
-        JavaRDD<String> col_regioni= lines_punti.map(line -> line.split(",")[0]);
-        JavaRDD<String> denom= lines_punti.map(line -> line.split(",")[1]);
-        JavaRDD<Tuple2<String, String>> result2= new Tuple2<String, String>(col_regioni)
-
-
- */
-
-
-
-
-
-
-    }
+}
 
 
 
