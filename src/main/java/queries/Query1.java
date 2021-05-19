@@ -105,10 +105,8 @@ public class Query1 {
 
         System.out.println("\n\nlines_somm: "+lines_somm.take(5));
 
-        JavaRDD<Tuple3<String, LocalDate, Integer>> area_data_tot = preproc_query1(lines_somm);
-        System.out.println("area_data_tot: "+area_data_tot.take(5));
-
-
+        JavaRDD<Tuple3<String, String, Integer>> area_data_tot = preproc_query1(lines_somm);
+        System.out.println("area_data_tot: "+area_data_tot.take(9));
 
 
 
@@ -116,6 +114,20 @@ public class Query1 {
     /*
     per prendere singola colonna:
         JavaRDD<String> col_regioni= lines_punti.map(line -> line.split(",")[0]);
+     */
+
+    /*
+    public static void parseDate (LocalDate myDate){
+        LocalDate first = new LocalDate(2021,01,01);
+        LocalDate last = new LocalDate(2021,01,01);
+
+        if myDate.isAfter(2021-01-01)
+
+
+
+
+    }
+
      */
 
     public static JavaRDD<String> removeHeader(JavaRDD<String> lines) {
@@ -128,24 +140,34 @@ public class Query1 {
 
     }
 
-    public static JavaRDD<Tuple3<String, LocalDate, Integer>> preproc_query1(JavaRDD<String> lines) {
+    //preproc somministrazioni vaccini summary latest, per prendere le colonne area, data somm, totale
+    //da mettere in una tupla x processare i dati dopo
+    public static JavaRDD<Tuple3<String, String, Integer>> preproc_query1(JavaRDD<String> lines) {
 
-        JavaRDD<Tuple3<String, LocalDate, Integer>> result = lines.map( row -> {
+        LocalDate firstDay = LocalDate.parse("2021-01-01");
+        LocalDate lastDay = LocalDate.parse("2021-05-31");
+
+        JavaRDD<Tuple3<String, LocalDate, Integer>> resultWithLocalDate = lines.map( row -> {
 
             String[] myFields = row.split(",");
             String col_area = myFields[1];
-            //LocalDate col_date = stringToDate(row.split(",")[0]);
             LocalDate col_date = LocalDate.parse(myFields[0]);
             Integer col_tot =  Integer.parseInt(myFields[2]);
 
             return new Tuple3<>(col_area, col_date, col_tot);
-        });
+        }).filter( line -> line._2().isAfter(firstDay) && line._2().isBefore(lastDay));
 
+        JavaRDD<Tuple3<String, String, Integer>> result = resultWithLocalDate.map(line ->
+            new Tuple3<>(line._1(), line._2().getMonth().toString(), line._3()));
+
+
+
+        //result = result.filter( line -> line._2().isAfter(firstDay) && line._2().isBefore(lastDay) == true);
 
 
         return result;
     }
-    
+
 
     //preproc punti somministrazioni x regione (devo contare numero punti somm x ogni regione)
     public static JavaRDD<Tuple2<String, String>> preproc_countVaccCenters(JavaRDD<String> lines_punti) {
