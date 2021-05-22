@@ -27,7 +27,6 @@ public class Query1 {
                 .setMaster("local[1]")
                 .setAppName("Query1");
         JavaSparkContext sc = new JavaSparkContext(conf);
-        System.out.println("ciao");
         sc.setLogLevel("ERROR");
 
 
@@ -35,15 +34,11 @@ public class Query1 {
 
         JavaRDD<String> lines_punti = sc.textFile(filePath_puntiSommTipologia);
         lines_punti = removeHeader(lines_punti);
-
-
         System.out.println("\nlines_punti: "+lines_punti.take(5));
 
 
         //tupla che ha <regioni, denominazione_struttura>
-        //TRANSFORMATION !!!!
-        JavaPairRDD<String, String> area_denomStrutt = centersPerArea2(lines_punti);
-
+        JavaPairRDD<String, String> area_denomStrutt = centersPerArea(lines_punti);
         System.out.println("\narea_denomStrutt: "+area_denomStrutt.take(5));
 
 
@@ -55,9 +50,6 @@ public class Query1 {
 
         JavaPairRDD<String, Integer> countingVaccCenters = area_denomStrutt.mapToPair( line -> new Tuple2<>(line._1, 1));
         JavaPairRDD<String, Integer> numVaccCenters = countingVaccCenters.reduceByKey((x,y) -> x+y).distinct();
-
-
-
         System.out.println("\nNumero centri vaccinali: "+numVaccCenters.take(21));
 
 
@@ -70,15 +62,12 @@ public class Query1 {
         lines_somm = removeHeader(lines_somm);
 
 
-        //System.out.println("\n\nlines_somm: "+lines_somm.take(5));
-
-        //qui ho KV [<ABR,FEB>,2000]
+        //qui ho KV es: [<ABR,FEB>,2000]
         JavaPairRDD<Tuple2<String, String>, Integer> area_month_totVacc = monthlyVaccinesPerArea(lines_somm);
+        System.out.println("\n\narea_month_totVacc PAIR KV: "+area_month_totVacc.take(30));
 
         //ora sommo tutti i tot vaccinazioni per quella chiave (quindi in quel mese)
         JavaPairRDD<Tuple2<String, String>, Integer> area_month_totVaccSum = area_month_totVacc.reduceByKey( (x,y) -> x +y);
-
-        System.out.println("\n\narea_month_totVacc PAIR KV: "+area_month_totVacc.take(30));
         System.out.println("area_month_totVaccSum SUM: "+area_month_totVaccSum.take(30));
 
         //ora cambio formato della tupla x fare il join
@@ -91,6 +80,7 @@ public class Query1 {
         JavaPairRDD<String, Tuple2< Tuple2<String, Integer>, Integer>> area_month_totVaccSum_numVaccCenters = areaKey_month_totVaccSum.join(numVaccCenters);
         System.out.println("area_month_totVaccSum_numVaccCenters JOIN : "+area_month_totVaccSum_numVaccCenters.take(30));
 
+        //faccio la media del numero di vaccinazioni totali in un mese effettuate da un generio centro vaccinale
         JavaPairRDD<Tuple2<String,String>,  Integer> area_month_avgVaccPerCenter = area_month_totVaccSum_numVaccCenters.mapToPair( line -> new Tuple2<>(new Tuple2<>(line._1, line._2._1._1) , line._2._1._2/line._2._2));
         System.out.println("area_month_avgVaccPerCenter : "+area_month_avgVaccPerCenter.take(30));
 
@@ -147,7 +137,7 @@ public class Query1 {
 
 
     //preproc punti somministrazioni x regione (devo contare numero punti somm x ogni regione)
-    public static JavaPairRDD<String, String> centersPerArea2(JavaRDD<String> lines_punti) {
+    public static JavaPairRDD<String, String> centersPerArea(JavaRDD<String> lines_punti) {
 
         JavaPairRDD <String, String> result = lines_punti.mapToPair(element -> {
                     String[] myFields = element.split(",");
@@ -163,21 +153,6 @@ public class Query1 {
     }
 
 
-    //preproc punti somministrazioni x regione (devo contare numero punti somm x ogni regione)
-    public static JavaRDD<Tuple2<String, String>> centersPerArea(JavaRDD<String> lines_punti) {
-
-        JavaRDD <Tuple2<String, String>> result = lines_punti.map(element -> {
-                    String[] myFields = element.split(",");
-                    String col_reg = myFields[0];
-                    String col_denom = myFields[1];
-                    return new Tuple2<>(col_reg,col_denom);
-                }
-        );
-
-
-        //System.out.println("RDD Tuple2 "+ result.take(5));
-        return result;
-    }
 
 
 }
