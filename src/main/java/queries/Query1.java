@@ -4,12 +4,15 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import scala.Int;
 import scala.Tuple2;
 import scala.Tuple3;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 
@@ -36,27 +39,12 @@ public class Query1 {
 
         System.out.println("\nlines_punti: "+lines_punti.take(5));
 
-        /*
-        //prendo header
-        String[] header = lines_punti.map(line -> line.split(",")).first();
-        String regione = header [0];
-
-        System.out.println("regione: "+regione);
-
-         */
 
         //tupla che ha <regioni, denominazione_struttura>
         //TRANSFORMATION !!!!
-        JavaRDD<Tuple2<String, String>> area_denomStrutt = centersPerArea(lines_punti);
+        JavaPairRDD<String, String> area_denomStrutt = centersPerArea2(lines_punti);
 
         System.out.println("\narea_denomStrutt: "+area_denomStrutt.take(5));
-
-
-        /*
-        per prendere singola colonna:
-        JavaRDD<String> col_regioni= lines_punti.map(line -> line.split(",")[0]);
-
-         */
 
 
         // poi contare il num di strutture per regione
@@ -64,14 +52,15 @@ public class Query1 {
         appartenenti a quella regione
          */
 
-        JavaPairRDD.fromJavaRDD(area_denomStrutt);
-        //ACTION !!!!!
-        Map<String, Long> counts = JavaPairRDD.fromJavaRDD(area_denomStrutt).countByKey();
-        System.out.println("\ncounts"+counts);
+
+        JavaPairRDD<String, Integer> countingVaccCenters = area_denomStrutt.mapToPair( line -> new Tuple2<>(line._1, 1));
+        JavaPairRDD<String, Integer> numVaccCenters = countingVaccCenters.reduceByKey((x,y) -> x+y).distinct();
 
 
-        Instant end = Instant.now();
-        System.out.println("CON PARALLELISMO : Query completed in " + Duration.between(start, end).toMillis() + "ms");
+
+        System.out.println("\nNumero centri vaccinali: "+numVaccCenters.take(21));
+
+
 
         /*
         ====================== inizio 2 parte della query (con file somministrazioni-latest) ===========================
@@ -81,16 +70,40 @@ public class Query1 {
         lines_somm = removeHeader(lines_somm);
 
 
-        System.out.println("\n\nlines_somm: "+lines_somm.take(5));
+        //System.out.println("\n\nlines_somm: "+lines_somm.take(5));
 
-        JavaPairRDD<Tuple2<String, String>, Integer> area_data_tot = monthlyVaccinesPerArea(lines_somm);
-        System.out.println("area_data_tot: "+area_data_tot.take(9));
+        //qui ho KV [<ABR,FEB>,2000]
+        JavaPairRDD<Tuple2<String, String>, Integer> area_month_totVacc = monthlyVaccinesPerArea(lines_somm);
 
+        //ora sommo tutti i tot vaccinazioni per quella chiave (quindi in quel mese)
+        JavaPairRDD<Tuple2<String, String>, Integer> area_month_totVaccSum = area_month_totVacc.reduceByKey( (x,y) -> x +y);
 
+        System.out.println("\n\narea_month_totVacc PAIR KV: "+area_month_totVacc.take(30));
+        System.out.println("area_month_totVaccSum SUM: "+area_month_totVaccSum.take(30));
+
+        //ora cambio formato della tupla x fare il join
+
+        JavaPairRDD<String, Tuple2<String, Integer>> areaKey_month_totVaccSum = area_month_totVaccSum.mapToPair(line -> new Tuple2<>(line._1._1, new Tuple2<>(line._1._2, line._2)));
+        System.out.println("area_month_totalSum: "+areaKey_month_totVaccSum.take(30));
+
+        //ora faccio join
+
+        JavaPairRDD<String, Tuple2< Tuple2<String, Integer>, Integer>> area_month_totVaccSum_numVaccCenters = areaKey_month_totVaccSum.join(numVaccCenters);
+        System.out.println("area_month_totVaccSum_numVaccCenters JOIN : "+area_month_totVaccSum_numVaccCenters.take(30));
+
+        JavaPairRDD<Tuple2<String,String>,  Integer> area_month_avgVaccPerCenter = area_month_totVaccSum_numVaccCenters.mapToPair( line -> new Tuple2<>(new Tuple2<>(line._1, line._2._1._1) , line._2._1._2/line._2._2));
+        System.out.println("area_month_avgVaccPerCenter : "+area_month_avgVaccPerCenter.take(30));
+
+        Instant end = Instant.now();
+        System.out.println("Tempo esecuzione query: " + Duration.between(start, end).toMillis() + "ms");
+
+        sc.close();
 
 
 
     }
+
+
     /*
     per prendere singola colonna:
         JavaRDD<String> col_regioni= lines_punti.map(line -> line.split(",")[0]);
@@ -106,6 +119,7 @@ public class Query1 {
         return lines_noHeader;
 
     }
+
 
 
     //preproc somministrazioni vaccini summary latest, per prendere le colonne area, data somm, totale
@@ -131,27 +145,22 @@ public class Query1 {
         return res;
     }
 
-    /*
+
     //preproc punti somministrazioni x regione (devo contare numero punti somm x ogni regione)
     public static JavaPairRDD<String, String> centersPerArea2(JavaRDD<String> lines_punti) {
 
-        JavaPairRDD<String, String> result = lines_punti.mapToPair(element -> {
+        JavaPairRDD <String, String> result = lines_punti.mapToPair(element -> {
                     String[] myFields = element.split(",");
                     String col_reg = myFields[0];
                     String col_denom = myFields[1];
-                    new Tuple2<>(col_reg,col_denom);
-             }
-
+                    return new Tuple2<>(col_reg,col_denom);
+                }
         );
-
 
 
         //System.out.println("RDD Tuple2 "+ result.take(5));
         return result;
     }
-    
-     */
-
 
 
     //preproc punti somministrazioni x regione (devo contare numero punti somm x ogni regione)
