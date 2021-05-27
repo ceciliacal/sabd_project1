@@ -4,14 +4,17 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.PairFunction;
+import org.apache.commons.math3.stat.regression.SimpleRegression;
 import scala.Tuple2;
 import scala.Tuple3;
 import scala.Tuple4;
 
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.util.HashMap;
+import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.Map;
 
 import static queries.Query1.removeHeader;
@@ -19,6 +22,7 @@ import static queries.Query1.removeHeader;
 public class Query2 {
 
     private static String filePath_sommVacciniLatest = "data/somministrazioni-vaccini-latest.csv";
+    private static Tuple3Comparator<LocalDate, String, String> tupComp =  new Tuple3Comparator<LocalDate, String, String>(Comparator.<LocalDate>naturalOrder(), Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
 
     public static void main(String[] args){
 
@@ -30,7 +34,7 @@ public class Query2 {
 
         JavaRDD<String> lines = sc.textFile(filePath_sommVacciniLatest);
         lines = removeHeader(lines);
-        System.out.println("\nlines_punti: "+lines.take(5));
+        //System.out.println("\nlines_punti: "+lines.take(5));
 
         JavaPairRDD<Tuple3<LocalDate, String, String>, Integer> month_area_age_numVacc_byBrand = monthlyVaccines(lines);
         System.out.println("\nmonth_area_age_numVacc_byBrand: "+month_area_age_numVacc_byBrand.take(5));
@@ -41,14 +45,14 @@ public class Query2 {
 
          */
 
-        //prova col molise
-        Map<String, Integer> map = new HashMap<>();
-        map.put("a",1);
-        System.out.println("\nmap : "+map.containsValue(1));//MAGGIORE UGUALE A 2
+        //TODO : ORDINAMENTO
+        JavaPairRDD<Tuple3<LocalDate, String, String>, Integer> bho = month_area_age_numVacc_byBrand.sortByKey(tupComp,true,1 );
+        System.out.println("\n----- bho: "+bho.take(30));
+
 
 
         //TOLGO DISTINZIONE PER FORNITORE: sommo tutti i vaccini effettuati a donne di stessa fascia anagrafica, nello stesso giorno e nella stessa regione
-       JavaPairRDD<Tuple3<String, String, String>, Tuple2 <LocalDate, Integer>> month_area_age_numVacc = month_area_age_numVacc_byBrand
+       JavaPairRDD<Tuple3<String, String, String>, Tuple2 <LocalDate, Integer>> month_area_age_numVacc = bho
                .reduceByKey((x,y) -> x+y)
                .mapToPair(line -> new Tuple2<>( new Tuple3<>(line._1._1().getMonth().toString(), line._1._2(), line._1._3()) , new Tuple2<>(line._1._1(), line._2) ));
                //.filter(x -> x._1._1().toString().equals("2021-03-04") && x._1._2().equals("TOS") && x._1._3().equals("90+"));
@@ -74,18 +78,25 @@ public class Query2 {
                 .mapToPair( line -> new Tuple2<>( new Tuple3<>(line._1._1(), line._1._2(), line._1._3()),1))
                 .reduceByKey((x,y) -> x+y)
                 .filter( x -> x._2 >= 2);       //check errore!!!!!!!!
+
+
         System.out.println("\nprovacount: "+provaCount.take(10));
+        /*
         System.out.println("\nprovacount SIZE: "+provaCount.count());
         System.out.println("\n provacount FEB,MOL,16-19 camp:"+provaCount.filter(x -> x._1._1().equals("FEBRUARY") && x._1._2().equals("MOL") && x._1._3().equals("16-19") ).take(27));
         System.out.println("\nprovacount FEB,EMR,30-39  "+provaCount.filter(x -> x._1._1().equals("FEBRUARY") && x._1._2().equals("EMR") && x._1._3().equals("30-39") ).take(28));
 
+
+         */
 
 
         Map<Tuple3<String, String, String>, Long> mappa = provaCount.countByKey();
         System.out.println("\nsize mappa: "+mappa.size());
 
         month_area_age_numVacc = month_area_age_numVacc.filter(x -> mappa.containsKey(x._1));
+
         System.out.println("\nFILTERED month_area_age_numVacc: "+month_area_age_numVacc.take(10));
+        /*
         System.out.println("\nCOUNT month_area_age_numVacc: "+month_area_age_numVacc.countByKey().size());
 
         System.out.println("\nFILTERED - PROVA FEB,EMR,30-39 camp: month_area_age_numVacc: "+month_area_age_numVacc.filter(x -> x._1._1().equals("FEBRUARY") && x._1._2().equals("EMR") && x._1._3().equals("30-39") && x._2()._2 == 0).take(27));
@@ -93,9 +104,55 @@ public class Query2 {
         System.out.println("\nFILTERED - PROVA 16FEB,BAS,16-19 camp: month_area_age_numVacc: "+month_area_age_numVacc.filter(x -> x._1._1().equals("FEBRUARY") && x._1._2().equals("BAS") && x._1._3().equals("16-19") && x._2()._2 == 0 ).take(27));
 
 
+         */
+        System.out.println("\nmonth_area_age_numVacc COUNT: "+month_area_age_numVacc.count());
+        JavaPairRDD<Tuple3<String, String, String>, SimpleRegression> reg = regress(month_area_age_numVacc);
+        System.out.println("\nreg COUNT: "+reg.count());
+
+        //TODO: DEVO ORDINARE LE DATE !!!!!!??????????
+        //JavaPairRDD<Tuple3<String, String, String>, Tuple3<LocalDate, Integer, Integer>> reg2 = reg.reduceByKey((x,y) -> x.append(y) );
 
 
 
+
+
+    }
+
+    /*
+
+    public static void provaComparator (){
+
+        JavaRDD<Tuple2<String, Integer>> sorted1 = wordSet.sortBy(new Function<Tuple2<String, Integer>, Integer>() {
+            public Integer call(Tuple2<String, Integer> value) throws Exception {
+                return value._2;
+            }
+        }, false, 1);
+        System.out.println("sorted:");
+        System.out.println(sorted1.collect());
+
+        //Using Comparator
+        JavaRDD<Tuple2<String, Integer>> sorted2 = wordSet.sortBy(new TupleComparator(), false, 1);
+        System.out.println("sorted:");
+        System.out.println(sorted1.collect());
+    }
+
+     */
+
+
+    //month_area_age_datenumVacc
+    public static JavaPairRDD<Tuple3<String, String, String>, SimpleRegression> regress(JavaPairRDD<Tuple3<String, String, String>, Tuple2 <LocalDate, Integer>> lines){
+
+        SimpleRegression regression = new SimpleRegression();
+        JavaPairRDD<Tuple3<String, String, String>, SimpleRegression> reg =  lines.mapToPair(line -> {
+            LocalDate myLocalDate = line._2._1();
+            Instant instant = myLocalDate.atStartOfDay().atZone(ZoneId.systemDefault()).toInstant();
+            Date myDate = Date.from(instant);
+            regression.addData((double) myDate.getTime(), (double) line._2._2());
+                    return new Tuple2<>(line._1, regression);
+                }
+        );
+
+        return reg;
     }
 
     /*
