@@ -10,25 +10,27 @@ import scala.Tuple3;
 import scala.Tuple4;
 
 
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.Map;
+import java.util.*;
 
 import static queries.Query1.removeHeader;
 
 public class Query2 {
 
     private static String filePath_sommVacciniLatest = "data/somministrazioni-vaccini-latest.csv";
-    private static Tuple3Comparator<LocalDate, String, String> tupComp =  new Tuple3Comparator<LocalDate, String, String>(Comparator.<LocalDate>naturalOrder(), Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
+    private static Tuple3Comparator<LocalDate, String, String> tupComp_date =  new Tuple3Comparator<LocalDate, String, String>(Comparator.<LocalDate>naturalOrder(), Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
+    private static Tuple3Comparator<String , String, String> tupComp =  new Tuple3Comparator<String, String, String>(Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
+    private static Tuple2Comparator<Integer, String> tup2comp = new Tuple2Comparator<>(Comparator.<Integer>naturalOrder(), Comparator.<String>naturalOrder());
+
 
     public static void main(String[] args){
 
         SparkConf conf = new SparkConf()
                 .setMaster("local[*]")
-                .setAppName("Query1");
+                .setAppName("Query2");
         JavaSparkContext sc = new JavaSparkContext(conf);
         sc.setLogLevel("ERROR");
 
@@ -46,7 +48,7 @@ public class Query2 {
          */
 
         //TODO : ORDINAMENTO
-        JavaPairRDD<Tuple3<LocalDate, String, String>, Integer> bho = month_area_age_numVacc_byBrand.sortByKey(tupComp,true,1 );
+        JavaPairRDD<Tuple3<LocalDate, String, String>, Integer> bho = month_area_age_numVacc_byBrand.sortByKey(tupComp_date,true,1 );
         System.out.println("\n----- bho: "+bho.take(30));
 
 
@@ -96,21 +98,82 @@ public class Query2 {
         month_area_age_numVacc = month_area_age_numVacc.filter(x -> mappa.containsKey(x._1));
 
         System.out.println("\nFILTERED month_area_age_numVacc: "+month_area_age_numVacc.take(10));
-        /*
-        System.out.println("\nCOUNT month_area_age_numVacc: "+month_area_age_numVacc.countByKey().size());
 
+        System.out.println("\nCOUNT month_area_age_numVacc: "+month_area_age_numVacc.countByKey().size());
+/*
         System.out.println("\nFILTERED - PROVA FEB,EMR,30-39 camp: month_area_age_numVacc: "+month_area_age_numVacc.filter(x -> x._1._1().equals("FEBRUARY") && x._1._2().equals("EMR") && x._1._3().equals("30-39") && x._2()._2 == 0).take(27));
         System.out.println("\nFILTERED - PROVA FEB,MOL,16-19 camp: month_area_age_numVacc: "+month_area_age_numVacc.filter(x -> x._1._1().equals("FEBRUARY") && x._1._2().equals("MOL") && x._1._3().equals("16-19") ).take(27));
         System.out.println("\nFILTERED - PROVA 16FEB,BAS,16-19 camp: month_area_age_numVacc: "+month_area_age_numVacc.filter(x -> x._1._1().equals("FEBRUARY") && x._1._2().equals("BAS") && x._1._3().equals("16-19") && x._2()._2 == 0 ).take(27));
 
 
          */
+
+        System.out.println("\n====== VEDO SE CE QUALCHE NEGATIVO "+month_area_age_numVacc.filter(x->x._2()._2 <= 0).take(30));
+
+
         System.out.println("\nmonth_area_age_numVacc COUNT: "+month_area_age_numVacc.count());
+        System.out.println("\nmonth_area_age_numVacc COUNT BY KEY: "+month_area_age_numVacc.distinct().count());
         JavaPairRDD<Tuple3<String, String, String>, SimpleRegression> reg = regress(month_area_age_numVacc);
         System.out.println("\nreg COUNT: "+reg.count());
 
         //TODO: DEVO ORDINARE LE DATE !!!!!!??????????
         //JavaPairRDD<Tuple3<String, String, String>, Tuple3<LocalDate, Integer, Integer>> reg2 = reg.reduceByKey((x,y) -> x.append(y) );
+        //posso usare come key quella in bho e faccio la add di data e num vacc (così sono ordinate), poi creo nuova tupla che ha come key mese,reg,fascia e come value il valore atteso
+        //oppure un java pair con una tupla4 come key in cui ci metto pure il mese
+
+        reg = reg.reduceByKey((x,y) -> {
+            x.append(y);
+            return x;
+        });
+
+        //System.out.println("\nreg prova test: "+month_area_age_numVacc.filter(x -> x._1._1().equals("FEBRUARY") && x._1._2().equals("EMR") && x._1._3().equals("30-39")).sort);
+
+
+        JavaPairRDD<Tuple3<String, String, String>, Integer> pred = reg.mapToPair( line -> {
+            double predictedNumVacc;
+            String currentMonth_str = line._1._1();
+
+            Date date = new SimpleDateFormat("MMM", Locale.ENGLISH).parse(currentMonth_str);
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(date);
+            cal.add(Calendar.MONTH, +2);
+            int currentMonth = cal.get(Calendar.MONTH);
+
+            String predictionDay_str = "2021-0"+currentMonth+"-01";
+            Date predictionDay=new SimpleDateFormat("yyyy-MM-dd").parse(predictionDay_str);
+
+            predictedNumVacc = line._2.predict((double)predictionDay.getTime());
+
+            return new Tuple2<>(new Tuple3<>(predictionDay_str, line._1._2(), line._1._3() ), (int)predictedNumVacc);
+
+        });
+
+        JavaPairRDD<Tuple3<String, String, String>, Integer> sortedPredictions = pred.sortByKey(tupComp,true,1 );
+        System.out.println("\nsortedPredictions: "+sortedPredictions.take(10));
+
+
+
+/*
+        System.out.println("\npred NEGATIVI count: "+pred.filter(x -> x._2 <0).count());
+        System.out.println("\npred NEGATIVI: "+pred.filter(x -> x._2 <0).take(39));
+        System.out.println("\nFILTERED - PROVA MAY,LAZ,80-89 camp: month_area_age_numVacc: "+month_area_age_numVacc.filter(x -> x._1._1().equals("MAY") && x._1._2().equals("LAZ") && x._1._3().equals("80-89") ).take(31));
+
+
+ */
+        JavaPairRDD<Tuple2<String, String>, Tuple2<Integer, String>> rank = sortedPredictions
+                .mapToPair( line -> new Tuple2<>(line._2, line._1))
+                .sortByKey(false)
+                .mapToPair(line -> new Tuple2<>(new Tuple2<>(line._2._1(), line._2._3()),  new Tuple2<>(line._1, line._2._2())));
+                //.sortByKey(tup2comp,false,1);
+                //map to pair e metto key giusta
+        //poi faccio reduce by key e comparo con Comparatore i value che gli passo
+
+
+        System.out.println("\nrank: "+rank.take(10));
+
+
+
+
 
 
 
@@ -118,32 +181,13 @@ public class Query2 {
 
     }
 
-    /*
-
-    public static void provaComparator (){
-
-        JavaRDD<Tuple2<String, Integer>> sorted1 = wordSet.sortBy(new Function<Tuple2<String, Integer>, Integer>() {
-            public Integer call(Tuple2<String, Integer> value) throws Exception {
-                return value._2;
-            }
-        }, false, 1);
-        System.out.println("sorted:");
-        System.out.println(sorted1.collect());
-
-        //Using Comparator
-        JavaRDD<Tuple2<String, Integer>> sorted2 = wordSet.sortBy(new TupleComparator(), false, 1);
-        System.out.println("sorted:");
-        System.out.println(sorted1.collect());
-    }
-
-     */
 
 
     //month_area_age_datenumVacc
     public static JavaPairRDD<Tuple3<String, String, String>, SimpleRegression> regress(JavaPairRDD<Tuple3<String, String, String>, Tuple2 <LocalDate, Integer>> lines){
 
-        SimpleRegression regression = new SimpleRegression();
         JavaPairRDD<Tuple3<String, String, String>, SimpleRegression> reg =  lines.mapToPair(line -> {
+            SimpleRegression regression = new SimpleRegression();
             LocalDate myLocalDate = line._2._1();
             Instant instant = myLocalDate.atStartOfDay().atZone(ZoneId.systemDefault()).toInstant();
             Date myDate = Date.from(instant);
@@ -155,28 +199,7 @@ public class Query2 {
         return reg;
     }
 
-    /*
 
-    public static JavaPairRDD<Tuple3<String, String, String>, Integer> preprocessData (JavaPairRDD<Tuple3<LocalDate, String, String>, Integer> lines){
-
-        JavaPairRDD<Tuple3<String, String, String>, Integer> tupla4 = lines
-                .mapToPair( line -> new Tuple2<>(new Tuple3<>(line._1._2(), line._1._3(), line._1._1().getMonth().toString()), line._2))
-                .reduceByKey((x,y) -> {
-                    if (x + y > 1) {
-
-                    }
-                    return x;
-                }).filter(x -> x._1._1().equals("TOS") && x._2.);
-
-
-
-        return tupla4;
-
-
-
-    }
-
-     */
 
 
     //prelevo dati e creo le tuple <Key:<1 del mese, regione, fascia eta, >, Value:numVacciniDonne>
