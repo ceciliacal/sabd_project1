@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
 
+import static org.spark_project.guava.collect.Iterables.limit;
 import static queries.Query1.removeHeader;
 
 public class Query2 {
@@ -23,7 +24,7 @@ public class Query2 {
     private static String filePath_sommVacciniLatest = "data/somministrazioni-vaccini-latest.csv";
     private static Tuple3Comparator<LocalDate, String, String> tupComp_date =  new Tuple3Comparator<LocalDate, String, String>(Comparator.<LocalDate>naturalOrder(), Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
     private static Tuple3Comparator<String , String, String> tupComp =  new Tuple3Comparator<String, String, String>(Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
-    private static Tuple2Comparator<Integer, String> tup2comp = new Tuple2Comparator<>(Comparator.<Integer>naturalOrder(), Comparator.<String>naturalOrder());
+    private static Tuple2Comparator<String, String> tup2comp = new Tuple2Comparator<>(Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
 
 
     public static void main(String[] args){
@@ -148,7 +149,8 @@ public class Query2 {
 
         });
 
-        JavaPairRDD<Tuple3<String, String, String>, Integer> sortedPredictions = pred.sortByKey(tupComp,true,1 );
+        JavaPairRDD<Tuple3<String, String, String>, Integer> sortedPredictions = pred
+                .sortByKey(tupComp,true,1 );
         System.out.println("\nsortedPredictions: "+sortedPredictions.take(10));
 
 
@@ -160,16 +162,27 @@ public class Query2 {
 
 
  */
-        JavaPairRDD<Tuple2<String, String>, Tuple2<Integer, String>> rank = sortedPredictions
+        List<Tuple2<Tuple2<String, String>, Iterable<Tuple2<Integer, String>>>> rank = sortedPredictions
                 .mapToPair( line -> new Tuple2<>(line._2, line._1))
                 .sortByKey(false)
-                .mapToPair(line -> new Tuple2<>(new Tuple2<>(line._2._1(), line._2._3()),  new Tuple2<>(line._1, line._2._2())));
-                //.sortByKey(tup2comp,false,1);
-                //map to pair e metto key giusta
-        //poi faccio reduce by key e comparo con Comparatore i value che gli passo
+                .mapToPair(line -> new Tuple2<>(new Tuple2<>(line._2._1(), line._2._3()),  new Tuple2<>(line._1, line._2._2())))
+                .groupByKey()
+                .sortByKey(tup2comp, true, 1)
+                .collect();
+
+        for (Tuple2<Tuple2<String, String>, Iterable<Tuple2<Integer, String>>> elem : rank){
+
+            Iterable<Tuple2<Integer, String>> value = elem._2;
+            System.out.println("\nkey: "+ elem._1());
+
+            System.out.println("\nelem: "+limit(value, 5));
+            System.out.println("#####\n\n");
 
 
-        System.out.println("\nrank: "+rank.take(10));
+        }
+
+
+        System.out.println("\nrank: "+rank);
 
 
 
