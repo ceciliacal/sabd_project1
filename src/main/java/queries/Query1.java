@@ -8,18 +8,20 @@ import scala.Int;
 import scala.Tuple2;
 import scala.Tuple3;
 
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.time.YearMonth;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
 
 
 public class Query1 {
 
-    private static String filePath_puntiSommTipologia = "data/punti-somministrazione-tipologia.csv";
-    private static String filePath_sommVacciniSummaryLatest = "data/somministrazioni-vaccini-summary-latest.csv";
+    public static String filePath_puntiSommTipologia = "data/punti-somministrazione-tipologia.csv";
+    public static String filePath_sommVacciniSummaryLatest = "data/somministrazioni-vaccini-summary-latest.csv";
 
     public static void main(String[] args){
 
@@ -81,7 +83,24 @@ public class Query1 {
         System.out.println("area_month_totVaccSum_numVaccCenters JOIN : "+area_month_totVaccSum_numVaccCenters.take(30));
 
         //faccio la media del numero di vaccinazioni totali in un mese effettuate da un generio centro vaccinale
-        JavaPairRDD<Tuple2<String,String>,  Integer> area_month_avgVaccPerCenter = area_month_totVaccSum_numVaccCenters.mapToPair( line -> new Tuple2<>(new Tuple2<>(line._1, line._2._1._1) , line._2._1._2/line._2._2));
+        JavaPairRDD<Tuple2<String,String>,  Integer> area_month_avgVaccPerCenter = area_month_totVaccSum_numVaccCenters.mapToPair( line -> {
+            //prendo il numero di giorni di un mese
+            String currentMonth_str = line._2._1._1;
+
+            Date date = new SimpleDateFormat("MMM", Locale.ENGLISH).parse(currentMonth_str);
+            Calendar cal = Calendar.getInstance();
+
+            cal.setTime(date);
+            cal.add(Calendar.MONTH, +1);
+            int currentMonth = cal.get(Calendar.MONTH);
+
+            YearMonth yearMonthObject = YearMonth.of(2021, currentMonth);
+            int daysInMonth = yearMonthObject.lengthOfMonth();
+
+            //ritorno tupla in cui effettuo divisione sia per numero di centri vaccinali sia per num giorni nel mese
+            return new Tuple2<>(new Tuple2<>(line._1, line._2._1._1) , Math.round(((line._2._1._2/line._2._2))/daysInMonth));
+        });
+
         System.out.println("area_month_avgVaccPerCenter : "+area_month_avgVaccPerCenter.take(30));
 
         Instant end = Instant.now();
