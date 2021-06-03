@@ -28,8 +28,10 @@ public class SqlQuery1 {
 
         SparkSession spark = SparkSession
                 .builder()
-                .appName("sqlQuery1").master("local[*]")
+                .appName("Query1")
                 .getOrCreate();
+        spark.sparkContext().setLogLevel("ERROR");
+
 
         Instant start = Instant.now();
 
@@ -48,7 +50,7 @@ public class SqlQuery1 {
         // create schema for row with StructType
         StructType scheme = new StructType().add("reg","string").add("denomStrutt","string");
         //create dataframe from CSV file and apply scheme to it
-        Dataset<Row> df_centers = spark.read().format("csv").option("header", "true").schema(scheme).csv(filePath_puntiSommTipologia);
+        Dataset<Row> df_centers = spark.read().format("csv").option("header", "true").schema(scheme).csv("hdfs://hdfs-namenode:9000"+filePath_puntiSommTipologia);
 
         //System.out.println("\n------DF = "+ df_centers.getRows(3,2));
         df_centers.show(3);
@@ -70,7 +72,7 @@ public class SqlQuery1 {
         // create schema for row with StructType
         StructType scheme = new StructType().add("date","date").add("area","string").add("numVacc","string");
         //create dataframe from CSV file and apply scheme to it
-        Dataset<Row> df_somm = spark.read().format("csv").option("header", "true").schema(scheme).csv(filePath_sommVacciniSummaryLatest);
+        Dataset<Row> df_somm = spark.read().format("csv").option("header", "true").schema(scheme).csv("hdfs://hdfs-namenode:9000"+filePath_sommVacciniSummaryLatest);
 
         df_somm.show(5);
 

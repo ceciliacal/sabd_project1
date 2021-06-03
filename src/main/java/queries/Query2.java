@@ -5,6 +5,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.commons.math3.stat.regression.SimpleRegression;
+import org.apache.spark.sql.SparkSession;
 import scala.Tuple2;
 import scala.Tuple3;
 import scala.Tuple4;
@@ -12,7 +13,6 @@ import utils.CsvWriter;
 import utils.Tuple2Comparator;
 import utils.Tuple3Comparator;
 
-import static org.spark_project.guava.collect.Iterables.limit;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,22 +24,30 @@ import static queries.Query1.removeHeader;
 
 public class Query2 {
 
-	private static String filePath_sommVacciniLatest = "data/somministrazioni-vaccini-latest.csv";
+	private static String filePath_sommVacciniLatest = "/data/somministrazioni-vaccini-latest.csv";
 	private static Tuple3Comparator<String , String, String> tupComp =  new Tuple3Comparator<String, String, String>(Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
 	private static Tuple2Comparator<String, String> tup2comp = new Tuple2Comparator<>(Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
 
 
 	public static void query2Main() {
 
-		SparkConf conf = new SparkConf()
-				.setMaster("local[*]")
-				.setAppName("Query2");
-		JavaSparkContext sc = new JavaSparkContext(conf);
-		sc.setLogLevel("ERROR");
+		SparkSession spark = SparkSession
+				.builder()
+				.appName("Query1")
+				.getOrCreate();
+		spark.sparkContext().setLogLevel("ERROR");
+
 
 		Instant start = Instant.now();
 
-		JavaRDD<String> lines = sc.textFile(filePath_sommVacciniLatest);
+		JavaRDD<String> lines =
+				spark.read().csv("hdfs://hdfs-namenode:9000"+filePath_sommVacciniLatest)
+						.toJavaRDD().map(
+						row-> {
+						//	System.out.println( row.mkString(","));
+							return row.mkString(",");
+						}
+				);
 		lines = removeHeader(lines);
 		//System.out.println("\nlines_punti: "+lines.take(5));
 
@@ -86,7 +94,7 @@ public class Query2 {
 		Instant end = Instant.now();
 		System.out.println("Tempo esecuzione query: " + Duration.between(start, end).toMillis() + "ms");
 
-		sc.close();
+		spark.close();
 
 
 	}

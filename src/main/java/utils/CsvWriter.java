@@ -1,23 +1,31 @@
 package utils;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import scala.Tuple2;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.PrintWriter;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-
-import static org.spark_project.guava.collect.Iterables.limit;
 
 public class CsvWriter {
 
-    public static String filePath_resQuery2 = "results/query2_result.csv";
-    public static String filePath_resQuery1 = "results/query1_result.csv";
+    public static String filePath_resQuery2 = "/results/query2_result.csv";
+    public static String filePath_resQuery1 = "/results/query1_result.csv";
 
 
     public static void writeQuery2 (List<Tuple2<Tuple2<String, String>, Iterable<Tuple2<Integer, String>>>> list) {
-
-        try (PrintWriter writer = new PrintWriter(new File(filePath_resQuery2))) {
+        Configuration configuration = new Configuration();
+        configuration.set("fs.defaultFS","hdfs://hdfs-namenode:9000");
+        FileSystem hdfs = null;
+        try {
+            hdfs = FileSystem.get(configuration);
+            Path hdfsWritePath = new Path("hdfs://hdfs-namenode:9000"+filePath_resQuery2);
+            FSDataOutputStream fsDataOutputStream = null;
+            fsDataOutputStream = hdfs.create(hdfsWritePath,true);
+            BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(fsDataOutputStream, StandardCharsets.UTF_8));
 
             StringBuilder sb = new StringBuilder();
             sb.append("Data, Fascia Anagrafica");
@@ -31,28 +39,41 @@ public class CsvWriter {
 
             for (Tuple2<Tuple2<String, String>, Iterable<Tuple2<Integer, String>>> elem : list){
                 Iterable<Tuple2<Integer, String>> value = elem._2;
-                //System.out.println("\nkey: "+ elem._1());
                 sb.append(elem._1());
                 sb.append(';');
-                sb.append(limit(value, 5));
+                int i = 0;
+                sb.append("[");
+                for (Tuple2<Integer, String> integerStringTuple2 : value) {
+                    if(i==5)
+                        break;
+                    sb.append(integerStringTuple2+",");
+                    i++;
+                }
+                sb.append("]");
                 sb.append('\n');
-
-
-                //System.out.println("\nelem: "+limit(value, 5));
-                //System.out.println("#####\n\n");
-
-
             }
 
-            writer.write(sb.toString());
+            bufferedWriter.write(sb.toString());
+            bufferedWriter.close();
         } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     public static void writeQuery1(List<Tuple2<Tuple2<String,Integer>,  Integer>> list) {
 
-        try (PrintWriter writer = new PrintWriter(new File(filePath_resQuery1))) {
+
+        Configuration configuration = new Configuration();
+        configuration.set("fs.defaultFS","hdfs://hdfs-namenode:9000");
+        FileSystem hdfs = null;
+        try {
+            hdfs = FileSystem.get(configuration);
+            Path hdfsWritePath = new Path("hdfs://hdfs-namenode:9000"+filePath_resQuery1);
+            FSDataOutputStream fsDataOutputStream = null;
+            fsDataOutputStream = hdfs.create(hdfsWritePath,true);
+            BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(fsDataOutputStream, StandardCharsets.UTF_8));
 
             StringBuilder sb = new StringBuilder();
             sb.append("Regione, Mese");
@@ -60,7 +81,6 @@ public class CsvWriter {
 
             sb.append("Numero medio vaccinazioni");
             sb.append('\n');
-
 
 
 
@@ -77,11 +97,13 @@ public class CsvWriter {
                 sb.append(value);
                 sb.append('\n');
 
-
             }
 
-            writer.write(sb.toString());
+            bufferedWriter.write(sb.toString());
+            bufferedWriter.close();
         } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
