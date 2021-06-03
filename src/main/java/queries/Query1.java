@@ -4,10 +4,10 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import scala.Int;
 import scala.Tuple2;
 import scala.Tuple3;
 import utils.CsvWriter;
+import utils.Tuple2Comparator;
 
 import java.text.SimpleDateFormat;
 import java.time.Duration;
@@ -21,10 +21,9 @@ public class Query1 {
 
     public static String filePath_puntiSommTipologia = "data/punti-somministrazione-tipologia.csv";
     public static String filePath_sommVacciniSummaryLatest = "data/somministrazioni-vaccini-summary-latest.csv";
-    public static String filePath_resQuery1 = "results/query1result";
     private static Tuple2Comparator<String, Integer> tup2comp = new Tuple2Comparator<>(Comparator.<String>naturalOrder(), Comparator.<Integer>naturalOrder());
 
-    public static void main(String[] args){
+    public static void query1Main(){
 
         SparkConf conf = new SparkConf()
                 .setMaster("local[*]")
@@ -49,6 +48,7 @@ public class Query1 {
 
         JavaRDD<String> lines_sommVacciniSummaryLatest = sc.textFile(filePath_sommVacciniSummaryLatest);
         List<Tuple2<Tuple2<String,Integer>,  Integer>> avgVaccPerCenter = computeAvgVacc(lines_sommVacciniSummaryLatest, numVaccCenters);
+        CsvWriter.writeQuery1(avgVaccPerCenter);
 
 
         Instant end = Instant.now();
@@ -105,7 +105,7 @@ public class Query1 {
 
         List<Tuple2<Tuple2<String,Integer>,  Integer>> resultList = area_monthNumber_avgVaccPerCenter.sortByKey(tup2comp, true, 1).collect();
         System.out.println("resultList : "+resultList);
-        CsvWriter.writeQuery1(resultList);
+
         return resultList;
 
     }

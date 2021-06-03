@@ -7,6 +7,8 @@ import org.apache.spark.sql.types.StructType;
 import queries.Query1;
 
 import java.text.ParseException;
+import java.time.Duration;
+import java.time.Instant;
 
 import static org.apache.spark.sql.functions.from_unixtime;
 import static org.apache.spark.sql.functions.unix_timestamp;
@@ -29,8 +31,14 @@ public class SqlQuery1 {
                 .appName("sqlQuery1").master("local[*]")
                 .getOrCreate();
 
+        Instant start = Instant.now();
+
         Dataset<Row> area_numCenters = preprocessNumCenters(spark);
         preprocessVaccinesSomm(spark, area_numCenters);
+
+        Instant end = Instant.now();
+        System.out.println("Tempo esecuzione query: " + Duration.between(start, end).toMillis() + "ms");
+        spark.close();
 
 
     }
@@ -64,7 +72,6 @@ public class SqlQuery1 {
         //create dataframe from CSV file and apply scheme to it
         Dataset<Row> df_somm = spark.read().format("csv").option("header", "true").schema(scheme).csv(filePath_sommVacciniSummaryLatest);
 
-        System.out.println("\nPROVAAAAA");
         df_somm.show(5);
 
 

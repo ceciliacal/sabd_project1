@@ -9,6 +9,8 @@ import scala.Tuple2;
 import scala.Tuple3;
 import scala.Tuple4;
 import utils.CsvWriter;
+import utils.Tuple2Comparator;
+import utils.Tuple3Comparator;
 
 import static org.spark_project.guava.collect.Iterables.limit;
 import java.text.SimpleDateFormat;
@@ -28,7 +30,7 @@ public class Query2 {
 	private static Tuple2Comparator<String, String> tup2comp = new Tuple2Comparator<>(Comparator.<String>naturalOrder(), Comparator.<String>naturalOrder());
 
 
-	public static void main(String[] args){
+	public static void query2Main() {
 
 		SparkConf conf = new SparkConf()
 				.setMaster("local[*]")
@@ -67,6 +69,7 @@ public class Query2 {
 		//creo top5
 		CsvWriter.writeQuery2(rank);
 
+		/*
 		for (Tuple2<Tuple2<String, String>, Iterable<Tuple2<Integer, String>>> elem : rank){
 			Iterable<Tuple2<Integer, String>> value = elem._2;
 			System.out.println("\nkey: "+ elem._1());
@@ -77,7 +80,7 @@ public class Query2 {
 
 		}
 
-
+		 */
 
 		System.out.println("\nrank: "+rank);
 
