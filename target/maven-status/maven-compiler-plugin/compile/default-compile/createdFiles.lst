@@ -1,8 +1,0 @@
-queries/Query2.class
-queries/Query1.class
-queries/StartQueries.class
-utils/Tuple3Comparator.class
-sparkSqlQueries/SqlQuery1.class
-utils/CsvWriter.class
-utils/ConvertIntToMonth.class
-utils/Tuple2Comparator.class
