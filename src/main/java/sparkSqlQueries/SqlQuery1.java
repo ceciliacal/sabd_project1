@@ -49,10 +49,9 @@ public class SqlQuery1 {
 
         // create schema for row with StructType
         StructType scheme = new StructType().add("reg","string").add("denomStrutt","string");
+
         //create dataframe from CSV file and apply scheme to it
         Dataset<Row> df_centers = spark.read().format("csv").option("header", "true").schema(scheme).csv("hdfs://hdfs-namenode:9000"+filePath_puntiSommTipologia);
-
-        //System.out.println("\n------DF = "+ df_centers.getRows(3,2));
         df_centers.show(3);
 
         // Register the DataFrame as a SQL temporary view
@@ -71,59 +70,43 @@ public class SqlQuery1 {
 
         // create schema for row with StructType
         StructType scheme = new StructType().add("date","date").add("area","string").add("numVacc","string");
+
         //create dataframe from CSV file and apply scheme to it
         Dataset<Row> df_somm = spark.read().format("csv").option("header", "true").schema(scheme).csv("hdfs://hdfs-namenode:9000"+filePath_sommVacciniSummaryLatest);
-
         df_somm.show(5);
-
 
         // Register the DataFrame as a SQL temporary view
         df_somm.createOrReplaceTempView("query1");
 
 
 
-        Dataset<Row> dataset = spark.sql("SELECT area, date, numVacc FROM query1 WHERE DATE(date) > DATE('2021-1-31')");
+        Dataset<Row> dataset = spark.sql("SELECT area, date, numVacc FROM query1 WHERE DATE(date) >= DATE('2021-01-01') AND DATE(date) <= DATE('2021-05-31')");
 
         System.out.println("------------DATASET---------");
         dataset.show(3);
         System.out.println("------------DATASET---------");
 
 
-        dataset.createOrReplaceTempView("initialDataset");
-        System.out.println("------------DATASETSUM---------1");
-        //Dataset<Row> datasetSum = spark.sql("SELECT area, MONTH(date) as month, SUM(numVacc) as sum FROM initialDataset GROUP BY area");
-        Dataset<Row> datasetSum = spark.sql("SELECT area, date_format(date, 'MMM') as mese , numVacc FROM initialDataset");
+        dataset.createOrReplaceTempView("initialdataset");
+        System.out.println("------------QUERY RESULT---------1");
+        area_numCenters.createOrReplaceTempView("regnumcenters");
+
+        //faccio join con dataset precedente (dei punti somministrazione) e restituisco area,mese,numVacc,ngiorni(quanti giorni ha un certo mese),numCentri(num centri vaccinali per quella area)
+        Dataset<Row> datasetSum = spark.sql("SELECT area, date_format(date, 'MMM') as mese , numVacc, day(last_day(date)) as ngiorni,  numCentri FROM initialDataset JOIN regNumCenters on initialDataset.area = regNumCenters.reg ");
         datasetSum.show(13);
+
+        System.out.println("------------QUERY RESULT---------2");
+
         datasetSum.createOrReplaceTempView("regMonthVaccines");
-        area_numCenters.createOrReplaceTempView("regNumCenters");
-        //Dataset<Row> areaMonthVaccines = spark.sql("SELECT area, mese, SUM(numVacc) as sum FROM areaMonthVaccines "+" GROUP BY area, mese");
-        Dataset<Row> regMonthVaccines = spark.sql("SELECT area, mese,  SUM(numVacc/numCentri) as monthlyVaccPerCenters FROM regMonthVaccines JOIN regNumCenters on regMonthVaccines.area = regNumCenters.reg GROUP BY area, mese");
+        //calcolo valor medio delle vaccinazioni
+        Dataset<Row> avgVacc = spark.sql("SELECT DISTINCT area, mese, SUM(numVacc/numCentri)/ngiorni as numVaccMedie FROM regMonthVaccines GROUP BY area, mese, ngiorni");
 
-        regMonthVaccines.createOrReplaceTempView("regMonthVaccines");
+        avgVacc.show(105);
 
-
-
-        regMonthVaccines.show(13);
-        System.out.println("------------DATASETSUM---------2");
-
-
-        /*
-        df_somm.withColumn("month", from_unixtime(unix_timestamp(dataset.col("date"), "yy/MM/dd hh:mm"), "MMMMM"));
-        System.out.println("---------------------");
-        dataset.show(3);
-        System.out.println("---------------------");
-
-         */
-
-
-
-
+        System.out.println("------------QUERY RESULT---------3");
 
 
         return dataset;
-
-
-
 
 
     }

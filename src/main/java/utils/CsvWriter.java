@@ -17,6 +17,8 @@ public class CsvWriter {
 
 
     public static void writeQuery2 (List<Tuple2<Tuple2<String, String>, Iterable<Tuple2<Integer, String>>>> list) {
+
+        //importo files di output su hdfs
         Configuration configuration = new Configuration();
         configuration.set("fs.defaultFS","hdfs://hdfs-namenode:9000");
         FileSystem hdfs = null;
@@ -43,6 +45,7 @@ public class CsvWriter {
                 sb.append(';');
                 int i = 0;
                 sb.append("[");
+                //top5
                 for (Tuple2<Integer, String> integerStringTuple2 : value) {
                     if(i==5)
                         break;
@@ -64,7 +67,7 @@ public class CsvWriter {
 
     public static void writeQuery1(List<Tuple2<Tuple2<String,Integer>,  Integer>> list) {
 
-
+        //importo files di output su hdfs
         Configuration configuration = new Configuration();
         configuration.set("fs.defaultFS","hdfs://hdfs-namenode:9000");
         FileSystem hdfs = null;
@@ -75,6 +78,7 @@ public class CsvWriter {
             fsDataOutputStream = hdfs.create(hdfsWritePath,true);
             BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(fsDataOutputStream, StandardCharsets.UTF_8));
 
+            //scrittura su csv
             StringBuilder sb = new StringBuilder();
             sb.append("Regione, Mese");
             sb.append(';');
